@@ -3,15 +3,15 @@
 */
 
 const METEOR_SHOWERS = [
-  { name: 'Quadrantids',   peakMonth: 0, peakDay: 3,  zhr: 110, description: 'Brief but intense peak.' },
-  { name: 'Lyrids',        peakMonth: 3, peakDay: 22, zhr: 18,  description: 'Known for bright meteors with glowing trails.' },
-  { name: 'Eta Aquariids', peakMonth: 4, peakDay: 6,  zhr: 50,  description: 'Debris from Halley\'s Comet.' },
-  { name: 'Delta Aquariids',peakMonth:6, peakDay: 30, zhr: 20,  description: 'Faint meteors best seen from southern latitudes.' },
-  { name: 'Perseids',      peakMonth: 7, peakDay: 12, zhr: 100, description: 'One of the most popular and reliable showers.' },
-  { name: 'Orionids',      peakMonth: 9, peakDay: 21, zhr: 20,  description: 'Fast meteors with persistent trains, from Halley\'s.' },
-  { name: 'Leonids',       peakMonth: 10,peakDay: 17, zhr: 15,  description: 'Fast meteors, occasional outburst storms.' },
-  { name: 'Geminids',      peakMonth: 11,peakDay: 14, zhr: 120, description: 'Often the strongest shower of the year.' },
-  { name: 'Ursids',        peakMonth: 11,peakDay: 22, zhr: 10,  description: 'A low-key shower preceding Christmas.' }
+  { name: 'Quadrantids',   peakMonth: 0, peakDay: 3,  zhr: 110, region: 'Northern Hemisphere', description: 'Brief but intense peak.' },
+  { name: 'Lyrids',        peakMonth: 3, peakDay: 22, zhr: 18,  region: 'Northern Hemisphere', description: 'Known for bright meteors with glowing trails.' },
+  { name: 'Eta Aquariids', peakMonth: 4, peakDay: 6,  zhr: 50,  region: 'Southern Hemisphere', description: 'Debris from Halley\'s Comet.' },
+  { name: 'Delta Aquariids',peakMonth:6, peakDay: 30, zhr: 20,  region: 'Southern Hemisphere', description: 'Faint meteors best seen from southern latitudes.' },
+  { name: 'Perseids',      peakMonth: 7, peakDay: 12, zhr: 100, region: 'Northern Hemisphere', description: 'One of the most popular and reliable showers.' },
+  { name: 'Orionids',      peakMonth: 9, peakDay: 21, zhr: 20,  region: 'Global', description: 'Fast meteors with persistent trains, from Halley\'s.' },
+  { name: 'Leonids',       peakMonth: 10,peakDay: 17, zhr: 15,  region: 'Global', description: 'Fast meteors, occasional outburst storms.' },
+  { name: 'Geminids',      peakMonth: 11,peakDay: 14, zhr: 120, region: 'Global (Best in North)', description: 'Often the strongest shower of the year.' },
+  { name: 'Ursids',        peakMonth: 11,peakDay: 22, zhr: 10,  region: 'Northern Hemisphere', description: 'A low-key shower preceding Christmas.' }
 ];
 
 let nextShower = null;
@@ -113,6 +113,7 @@ function updateUI() {
       weekday: 'short', year: 'numeric', month: 'short', day: 'numeric', timeZoneName: 'short'
     });
     document.getElementById('shower-date').textContent = formatter.format(nextShower.peakDate);
+    document.getElementById('shower-region').textContent = nextShower.region;
     document.getElementById('shower-zhr').textContent = `${nextShower.zhr} meteors/hr`;
 
     const vis = calculateVisibility(nextShower.peakDate);
