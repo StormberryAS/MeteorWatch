@@ -7,8 +7,8 @@ Deterministic offline meteor shower tracker. MeteorWatch calculates the countdow
 ## Features
 - **Embedded Showers**: includes Perseids, Geminids, Leonids, Lyrids, Orionids, and more.
 - **Offline Countdown**: real-time countdown to the next peak.
-- **Moon Interference Score**: utilizes `suncalc.js` to determine the exact moon phase and illumination percentage during the shower peak to rate visibility as EXCELLENT, GOOD, or POOR.
-- **Responsive Layout**: optimized for mobile and desktop with a cinematic indigo glassmorphism theme.
+- **Moon Interference Score**: utilises `suncalc.js` to determine the exact moon phase and illumination percentage during the shower peak to rate visibility as EXCELLENT, GOOD, or POOR.
+- **Responsive Layout**: optimised for mobile and desktop with a cinematic indigo glassmorphism theme.
 
 ## Architecture
 - **Vanilla HTML and CSS, TypeScript**, no frameworks.
@@ -21,8 +21,8 @@ Deterministic offline meteor shower tracker. MeteorWatch calculates the countdow
 
 ## Stack
 - Browser `Date` for real-time countdown calculations.
-- Hardcoded localized astronomical dataset for meteor peaks.
-- [SunCalc](https://github.com/mourner/suncalc) for local moon phase/illumination modeling.
+- Hardcoded localised astronomical dataset for meteor peaks.
+- [SunCalc](https://github.com/mourner/suncalc) for local moon phase/illumination modelling.
 - [Inter](https://rsms.me/inter/) typeface, locally hosted.
 
 ## Local development
