@@ -1,5 +1,5 @@
 /* MeteorWatch Logic
-   Offline determination of upcoming meteor showers and their visibility.
+   Determination of upcoming meteor showers and their visibility, calculated in the browser.
 
    A classic script, not a module: index.html loads suncalc.js (which publishes window.SunCalc,
    typed in ts/suncalc.d.ts) and then app.js, and both share one global scope. This file has no

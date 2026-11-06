@@ -1,12 +1,12 @@
 # MeteorWatch
 
-Deterministic offline meteor shower tracker. MeteorWatch calculates the countdown to the next major annual meteor shower peak and dynamically cross-references it with local moon illumination data to predict true visibility without any external APIs.
+Deterministic meteor shower tracker. MeteorWatch calculates the countdown to the next major annual meteor shower peak and dynamically cross-references it with local moon illumination data to predict true visibility without any external APIs. The page comes from the web; the calculation then runs in your browser and nothing is sent to a server. There is no service worker, so the page does not promise to open again without a connection.
 
 **Live:** [meteor.stormberry.as](https://meteor.stormberry.as)
 
 ## Features
 - **Embedded Showers**: includes Perseids, Geminids, Leonids, Lyrids, Orionids, and more.
-- **Offline Countdown**: real-time countdown to the next peak.
+- **Countdown**: real-time countdown to the next peak, calculated in your browser.
 - **Moon Interference Score**: utilises `suncalc.js` to determine the exact moon phase and illumination percentage during the shower peak to rate visibility as EXCELLENT, GOOD, or POOR.
 - **Responsive Layout**: optimised for mobile and desktop with a cinematic indigo glassmorphism theme.
 
