@@ -2,11 +2,13 @@
 # Compile MeteorWatch's TypeScript (ts/) into the JavaScript the page loads.
 #
 # Copied on 5 November 2026 from AstroQuiz's tools/build-ts.sh (itself from GDPRLetterBuilder's,
-# EclipseTracker's and the Website's). Changed for MeteorWatch: two sources, ts/app.ts and ts/peaks.ts, which
-# compile to app.js and peaks.js (ts/peaks.ts is written by tools/gen-peaks.py, not by hand). MeteorWatch has
-# no ES modules: index.html loads suncalc.js, peaks.js and app.js as classic scripts that share one global
-# scope, as in SunApp. ts/suncalc.d.ts types the vendored SunCalc 1.8.0
-# (suncalc.js, kept byte for byte), which is the only other JavaScript allowed at the root.
+# EclipseTracker's and the Website's). Changed for MeteorWatch: three sources, ts/app.ts, ts/peaks.ts and
+# ts/visibility.ts, which compile to app.js, peaks.js and visibility.js (ts/peaks.ts is written by
+# tools/gen-peaks.py, not by hand). MeteorWatch has no ES modules: index.html loads suncalc.js, peaks.js,
+# visibility.js and app.js as classic scripts that share one global scope, as in SunApp. ts/suncalc.d.ts
+# types the vendored SunCalc 1.8.0 (suncalc.js, kept byte for byte), and ts/cities.d.ts types the shared
+# city catalogue (cities.js, copied byte for byte from SunApp, added to the page at run time by app.js).
+# Those two are the only other JavaScript allowed at the root.
 #
 #   tools/build-ts.sh           install the pinned compiler, compile ts/app.ts into app.js at the
 #                               repository root, then run bump_assets.py so the page carries the
@@ -15,9 +17,10 @@
 #   tools/build-ts.sh --check   change nothing: fail when app.js is missing, is not tracked by git
 #                               (in a git checkout), or is not (stamps aside) byte for byte what
 #                               ts/app.ts compiles to; when the root holds a .js that no source
-#                               compiles to, other than the vendored suncalc.js; or when a page
-#                               carries a stale ?v=; or when ts/peaks.ts is not what
-#                               tools/gen-peaks.py writes
+#                               compiles to, other than the vendored suncalc.js and the copied
+#                               cities.js; or when a page carries a stale ?v=; or when ts/peaks.ts is
+#                               not what tools/gen-peaks.py writes; or when cities.js fails
+#                               tools/check-city-parity.py
 #
 # Stamps. bump_assets.py stamps the page's src and href with each file's hash (?v=...). app.js
 # imports nothing, but every comparison below strips a stamp from a relative import first
@@ -83,9 +86,10 @@ mapfile -t EXPECTED < <(cd ts && find . -type f -name '*.ts' ! -name '*.d.ts' -p
 [ "${OUTPUTS[*]}" = "${EXPECTED[*]}" ] \
   || die "tsc emitted [${OUTPUTS[*]}] but ts/ holds sources for [${EXPECTED[*]}]; look at tsconfig.json"
 
-# The JavaScript at the root that is not compiled from ts/: the vendored SunCalc 1.8.0. Nothing
-# else may sit beside the compiled file.
-NOT_COMPILED=(suncalc.js)
+# The JavaScript at the root that is not compiled from ts/: the vendored SunCalc 1.8.0 and the shared
+# city catalogue (cities.js, copied byte for byte, never edited here). Nothing else may sit beside the
+# compiled files.
+NOT_COMPILED=(suncalc.js cities.js)
 
 # "./$1": a path that git reads as a path, whatever it starts with.
 tracked() { [ "$GIT" = 1 ] && git ls-files --error-unmatch "./$1" >/dev/null 2>&1; }
@@ -104,7 +108,7 @@ if [ "$MODE" = check ]; then
       echo "build-ts: $f matches ts/${f%.js}.ts"
     fi
   done
-  # JavaScript with no source: the root holds only what the TypeScript compiles to, and suncalc.js.
+  # JavaScript with no source: the root holds only what the TypeScript compiles to, suncalc.js and cities.js.
   mapfile -t PRESENT < <(find . -maxdepth 1 -type f \( -name '*.js' -o -name '*.mjs' -o -name '*.cjs' \) -printf '%P\n' | LC_ALL=C sort)
   for f in "${PRESENT[@]}"; do
     case " ${OUTPUTS[*]} ${NOT_COMPILED[*]} " in
@@ -113,6 +117,7 @@ if [ "$MODE" = check ]; then
     esac
   done
   python3 -I "$ROOT/tools/gen-peaks.py" --check || bad=1
+  python3 -I "$ROOT/tools/check-city-parity.py" || bad=1
   python3 -I "$ROOT/bump_assets.py" --check || bad=1
   [ "$bad" = 0 ] || exit 1
   echo "build-ts: check passed"

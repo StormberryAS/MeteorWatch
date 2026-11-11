@@ -24,6 +24,10 @@ What it does NOT touch, deliberately:
   * font files referenced from inside a CSS file - the CSS gets a new ?v= when
     it changes, and the font bytes are immutable anyway
 
+Compiled scripts that name another file in a quoted './x.js' literal (STAMPED_SCRIPTS below) are
+stamped the same way: app.js adds cities.js to the page at run time, with no src attribute for the
+page loop to stamp, so the literal in the compiled app.js carries the ?v= (ported from SunApp).
+
 Usage:  python3 bump_assets.py [--check]
         --check exits 1 if any page is stale, without writing. For a git hook.
 """
@@ -36,6 +40,9 @@ import sys
 ROOT = pathlib.Path(__file__).parent
 SKIP_DIRS = {"switcher-icons", "node_modules", ".git", "android", "dist", "fastlane"}
 ASSET_RE = re.compile(r'(?P<attr>src|href)="(?P<path>(?!https?://|//|data:|#|mailto:)[^"?#]+\.(?:js|css))(?:\?v=[^"]*)?"')
+# Compiled scripts whose quoted './x.js' and './x.css' literals are stamped (see above).
+STAMPED_SCRIPTS = ["app.js"]
+LITERAL_RE = re.compile(r"""(?P<q>['"])(?P<path>\./[^'"?#\s]+\.(?:js|css))(?:\?v=[0-9a-f]*)?(?P=q)""")
 
 
 def pages():
@@ -55,6 +62,33 @@ def main() -> None:
     check_only = "--check" in sys.argv
     cache: dict[str, str] = {}
     stale, seen = [], set()
+
+    for name in STAMPED_SCRIPTS:
+        script = ROOT / name
+        if not script.is_file():
+            continue
+        text = script.read_text(encoding="utf-8")
+
+        def stamp_literal(m: re.Match) -> str:
+            rel = m.group("path")
+            target = (script.parent / rel).resolve()
+            # A path that leaves the repository (./../x.js) is left as it is rather than failing
+            # the whole bump.
+            if not target.is_relative_to(ROOT.resolve()):
+                return m.group(0)
+            if not target.is_file() or SKIP_DIRS & set(target.relative_to(ROOT.resolve()).parts):
+                return m.group(0)
+            key = str(target)
+            if key not in cache:
+                cache[key] = digest(target)
+            seen.add(target.relative_to(ROOT.resolve()).as_posix())
+            return f'{m.group("q")}{rel}?v={cache[key]}{m.group("q")}'
+
+        updated = LITERAL_RE.sub(stamp_literal, text)
+        if updated != text:
+            stale.append(name)
+            if not check_only:
+                script.write_text(updated, encoding="utf-8")
 
     for page in pages():
         text = page.read_text(encoding="utf-8")

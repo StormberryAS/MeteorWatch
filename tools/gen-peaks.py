@@ -4,6 +4,8 @@
     python3 tools/gen-peaks.py           write ts/peaks.ts
     python3 tools/gen-peaks.py --check   change nothing; exit 1 when ts/peaks.ts is not what a
                                          fresh run would write
+    python3 tools/gen-peaks.py --self-test  check the precession routine against the worked
+                                         example of Meeus, Astronomical Algorithms, ch. 21
 
 Standard library only. The output is deterministic: no clock, no randomness, no locale.
 
@@ -61,6 +63,23 @@ to a fraction of an arc second. tests/peaks.test.ts compares the table with the 
 IMO data (retrieved 2026-11-11): Table 5 on page 25 of
 https://www.imo.net/files/meteor-shower/cal2026.pdf and cal2027.pdf. ZHR is IMO's table value.
 Southern delta-Aquariids and Orionids are printed to the whole degree only (about one day).
+
+Names. The page shows IMO's full working-list names with the Greek letters spelled out
+(Marcos Thomassen Povoa, 2026-11-11): "April Lyrids" (IMO Table 5), "Eta Aquariids" (IMO
+"eta-Aquariids") and "Southern Delta Aquariids" (Table 5 abbreviates it to "S. delta-Aquariids"; the
+running text of both calendars prints "Southern delta-Aquariids").
+
+Radiants. Each row also carries the shower's radiant at the peak instant (right ascension and
+declination in degrees, mean equinox of the peak date), for the city filter of the page. The source
+is Table 6 (page 26 of both calendars, "Radiant drift", identical in 2026 and 2027 for these nine
+showers): RADIANT_DRIFT below. A date in Table 6 is read as 00h UT, and "Jan 0" is 31 December. The
+radiant at the peak is the linear interpolation, in time, between the two rows around the peak
+instant; that J2000.0 position is then precessed to the mean equinox of the peak date (Meeus,
+Astronomical Algorithms, 2nd ed., chapter 21, rigorous method; no nutation, no aberration), so that
+the page can use it with Greenwich mean sidereal time without a correction of its own. Precession
+moves a radiant by 0.3 to 0.5 degrees between 2026 and 2037. The generator stops when a peak is
+outside the rows of its shower, or when two rows that it interpolates between differ by more than
+180 degrees in right ascension.
 """
 
 import datetime
@@ -78,15 +97,35 @@ APPLY_ABERRATION = False
 # id, name as the page shows it, IMO lambda-sun (degrees, equinox J2000.0), IMO ZHR.
 SHOWERS = (
     ("QUA", "Quadrantids", 283.15, 80),
-    ("LYR", "Lyrids", 32.32, 18),
+    ("LYR", "April Lyrids", 32.32, 18),
     ("ETA", "Eta Aquariids", 45.5, 50),
-    ("SDA", "Delta Aquariids", 128.0, 25),
+    ("SDA", "Southern Delta Aquariids", 128.0, 25),
     ("PER", "Perseids", 140.0, 100),
     ("ORI", "Orionids", 208.0, 20),
     ("LEO", "Leonids", 235.27, 15),
     ("GEM", "Geminids", 262.2, 150),
     ("URS", "Ursids", 270.7, 10),
 )
+
+# IMO Table 6 ("Radiant drift", page 26 of the 2026 and 2027 calendars): month, day, right ascension,
+# declination, degrees, equinox J2000.0, 00h UT. Day 0 of January is 31 December of the year before.
+# Table 6 lists several showers in one column; each row here is matched to its shower by the radiant
+# of Table 5 and by continuity.
+RADIANT_DRIFT = {
+    "QUA": ((12, 30, 226, 50), (1, 0, 228, 50), (1, 5, 231, 49), (1, 10, 234, 48)),
+    "LYR": ((4, 15, 263, 34), (4, 20, 269, 34), (4, 25, 274, 34), (4, 30, 279, 34)),
+    "ETA": ((4, 20, 323, -7), (4, 25, 328, -5), (4, 30, 332, -3), (5, 5, 337, -1),
+            (5, 10, 341, 1), (5, 15, 345, 3), (5, 20, 349, 5), (5, 25, 353, 7)),
+    "SDA": ((7, 10, 325, -19), (7, 15, 329, -19), (7, 20, 333, -18), (7, 25, 337, -17), (7, 30, 340, -16),
+            (8, 5, 345, -14), (8, 10, 349, -13), (8, 15, 352, -12), (8, 20, 356, -11)),
+    "PER": ((7, 15, 6, 50), (7, 20, 11, 52), (7, 25, 22, 53), (7, 30, 29, 54), (8, 5, 37, 56),
+            (8, 10, 45, 57), (8, 15, 51, 58), (8, 20, 57, 58), (8, 25, 63, 58)),
+    "ORI": ((10, 5, 85, 14), (10, 10, 88, 15), (10, 15, 91, 15), (10, 20, 94, 16), (10, 25, 98, 16),
+            (10, 30, 101, 16), (11, 5, 105, 17)),
+    "LEO": ((11, 10, 147, 24), (11, 15, 150, 23), (11, 20, 153, 21), (11, 25, 156, 20), (11, 30, 159, 19)),
+    "GEM": ((12, 5, 103, 33), (12, 10, 108, 33), (12, 15, 113, 33), (12, 20, 118, 32)),
+    "URS": ((12, 20, 217, 76), (12, 25, 217, 74)),
+}
 
 ARCSEC = math.pi / (180 * 3600)
 UNIX_EPOCH_JD = 2440587.5
@@ -422,11 +461,71 @@ def iso_minute(unix_seconds):
     return moment.strftime("%Y-%m-%dT%H:%MZ")
 
 
+def radiant_at(code, minute_unix, year):
+    """(right ascension, declination) in degrees, equinox J2000.0, at the instant, from IMO Table 6 (see RADIANT_DRIFT).
+
+    Each row of the table is given the year (the peak's year minus 1, the same, or plus 1) that puts
+    it nearest to the peak. The radiant is interpolated linearly in time between the rows around the
+    peak. Raises ValueError when the peak is outside the rows, or when the interpolation would
+    cross a jump of more than 180 degrees in right ascension.
+    """
+    dated = []
+    for month, day, ra, dec in RADIANT_DRIFT[code]:
+        best = None
+        for y in (year - 1, year, year + 1):
+            moment = datetime.datetime(y, month, 1, tzinfo=datetime.timezone.utc) + datetime.timedelta(days=day - 1)
+            t = moment.timestamp()
+            if best is None or abs(t - minute_unix) < abs(best - minute_unix):
+                best = t
+        dated.append((best, ra, dec))
+    dated.sort()
+    for (t0, ra0, dec0), (t1, ra1, dec1) in zip(dated, dated[1:]):
+        if t0 <= minute_unix <= t1:
+            if abs(ra1 - ra0) > 180:
+                raise ValueError(f"{code}: Table 6 rows differ by more than 180 degrees in right ascension")
+            f = (minute_unix - t0) / (t1 - t0)
+            return ra0 + f * (ra1 - ra0), dec0 + f * (dec1 - dec0)
+    raise ValueError(f"{code}: the peak at {iso_minute(minute_unix)} is outside the rows of Table 6")
+
+
+def precess_from_j2000(ra, dec, unix_seconds):
+    """(right ascension, declination) in degrees at the mean equinox of the date, from J2000.0 values.
+
+    Meeus, Astronomical Algorithms, 2nd ed., chapter 21, rigorous method (formulae 21.2 and 21.4),
+    starting epoch J2000.0. The time argument is Julian centuries of 36525 days from J2000.0 and
+    is taken from UT, which is far below the precision needed for a precession of a few tenths of
+    a degree. No proper motion, nutation or aberration.
+    """
+    t = (unix_seconds / 86400 + UNIX_EPOCH_JD - J2000_JD) / 36525
+    zeta = math.radians((2306.2181 * t + 0.30188 * t * t + 0.017998 * t ** 3) / 3600)
+    z = math.radians((2306.2181 * t + 1.09468 * t * t + 0.018203 * t ** 3) / 3600)
+    theta = math.radians((2004.3109 * t - 0.42665 * t * t - 0.041833 * t ** 3) / 3600)
+    a0, d0 = math.radians(ra), math.radians(dec)
+    a = math.cos(d0) * math.sin(a0 + zeta)
+    b = math.cos(theta) * math.cos(d0) * math.cos(a0 + zeta) - math.sin(theta) * math.sin(d0)
+    c = math.sin(theta) * math.cos(d0) * math.cos(a0 + zeta) + math.cos(theta) * math.sin(d0)
+    return (math.degrees(math.atan2(a, b) + z) % 360.0, math.degrees(math.asin(c)))
+
+
+def self_test():
+    """Meeus example 21.b: theta Persei, J2000 (41.054063, 49.227750) to 2028 November 13.19 TD."""
+    jde = 2462088.69
+    unix = (jde - UNIX_EPOCH_JD) * 86400
+    ra, dec = precess_from_j2000(41.054063, 49.227750, unix)
+    ok = abs(ra - 41.547214) < 0.0005 and abs(dec - 49.348483) < 0.0005
+    print(f"gen-peaks self-test: Meeus 21.b gives {ra:.6f} {dec:.6f}, expected 41.547214 49.348483: {'ok' if ok else 'FAILED'}")
+    return 0 if ok else 1
+
+
 def peaks():
     rows = []
     for year in range(FIRST_YEAR, LAST_YEAR + 1):
         for code, name, lam, zhr in SHOWERS:
-            rows.append((iso_minute(crossing(year, lam)), code, name, lam, zhr))
+            minute_unix = math.floor(crossing(year, lam) / 60 + 0.5) * 60
+            ra, dec = radiant_at(code, minute_unix, year)
+            ra, dec = precess_from_j2000(ra, dec, minute_unix)
+            ra, dec = round(ra, 2), round(dec, 2)
+            rows.append((iso_minute(minute_unix), code, name, lam, zhr, ra, dec))
     rows.sort()
     return rows
 
@@ -447,10 +546,15 @@ HEADER = """\
 
    What the instants are, and are not. They are where the model puts the Earth at the stream's
    node. The real maximum of a shower varies from year to year. IMO gives the Quadrantid peak an
-   uncertainty of about 2.5 hours; the Eta Aquariids, Delta Aquariids, Perseids, Orionids and
-   Geminids have broad maxima; and IMO prints the Orionid and Delta Aquariid longitudes to the
-   whole degree only (about a day). Use the instant as the centre of the best window, not as a
+   uncertainty of about 2.5 hours; the Eta Aquariids, Southern Delta Aquariids, Perseids, Orionids
+   and Geminids have broad maxima; and IMO prints the Orionid and Southern Delta Aquariid
+   longitudes to the whole degree only (about a day). Use the instant as the centre of the best window, not as a
    promise.
+
+   The radiant (ra, dec) is IMO's mean radiant at the peak instant: Table 6 (Radiant drift, page 26
+   of both calendars), interpolated linearly in time and precessed from J2000.0 to the mean equinox
+   of the peak date (Meeus ch. 21), right ascension and declination in degrees. The city filter of
+   the page uses it with the Sun's position; see ts/visibility.ts.
 
    Rows are sorted by instant, then by id. Every shower has a row for every year from
    {first} to {last}; the Quadrantids of January belong to that calendar year. */
@@ -469,6 +573,10 @@ interface ShowerPeak {{
   readonly lambdaSun: number;
   /** IMO's zenithal hourly rate. */
   readonly zhr: number;
+  /** The radiant's right ascension at the peak, degrees, mean equinox of the peak date (IMO Table 6, interpolated, precessed). */
+  readonly ra: number;
+  /** The radiant's declination at the peak, degrees, mean equinox of the peak date (IMO Table 6, interpolated, precessed). */
+  readonly dec: number;
 }}
 
 const PEAKS_FIRST_YEAR = {first};
@@ -481,16 +589,18 @@ const PEAKS: readonly ShowerPeak[] = [
 def render():
     ids = " | ".join(f"'{code}'" for code, *_ in SHOWERS)
     out = [HEADER.format(first=FIRST_YEAR, last=LAST_YEAR), TYPES.format(ids=ids, first=FIRST_YEAR, last=LAST_YEAR)]
-    for utc, code, name, lam, zhr in peaks():
-        out.append(f"  {{ id: '{code}', name: '{name}', utc: '{utc}', lambdaSun: {lam!r}, zhr: {zhr} }},\n")
+    for utc, code, name, lam, zhr, ra, dec in peaks():
+        out.append(f"  {{ id: '{code}', name: '{name}', utc: '{utc}', lambdaSun: {lam!r}, zhr: {zhr}, ra: {ra!r}, dec: {dec!r} }},\n")
     out.append("];\n")
     return "".join(out)
 
 
 def main(argv):
     target = pathlib.Path(__file__).resolve().parent.parent / "ts" / "peaks.ts"
-    if argv not in ([], ["--check"]):
-        sys.exit("usage: gen-peaks.py [--check]")
+    if argv not in ([], ["--check"], ["--self-test"]):
+        sys.exit("usage: gen-peaks.py [--check | --self-test]")
+    if argv == ["--self-test"]:
+        return self_test()
     fresh = render()
     if argv == ["--check"]:
         current = target.read_text(encoding="utf-8") if target.exists() else ""

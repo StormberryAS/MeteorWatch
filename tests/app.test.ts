@@ -1,5 +1,5 @@
-// The app's logic as the page runs it: the compiled suncalc.js, peaks.js and app.js, run as
-// classic scripts in one Node vm context. The document is a stub with a few elements that keep
+// The app's logic as the page runs it: the compiled suncalc.js, peaks.js, visibility.js and app.js,
+// run as classic scripts in one Node vm context. The document is a stub with a few elements that keep
 // their textContent and className; the clock is fixed, and setTimeout only records its delay.
 
 import { test } from 'node:test';
@@ -9,7 +9,14 @@ import vm from 'node:vm';
 
 interface Upcoming { peak: { id: string; name: string; utc: string; zhr: number }; time: number }
 interface Visibility { moonPhaseText: string; visibilityScore: string; visibilityClass: string }
-interface Element { textContent: string; className: string; classList: { toggle(name: string, force: boolean): void; remove(name: string): void }; long?: boolean }
+interface Element {
+  textContent: string; className: string; hidden: boolean;
+  classList: { toggle(name: string, force: boolean): void; remove(name: string): void };
+  /** The classes added with classList. */
+  classes: Set<string>;
+  /** Whether the class countdown-long is set. */
+  readonly long: boolean;
+}
 
 let fixedNow = 0;
 /** Date with a fixed "now": new Date() and Date.now() read fixedNow; any other use is the real Date. */
@@ -21,11 +28,19 @@ class FixedDate extends Date {
   static override now(): number { return fixedNow; }
 }
 
-const IDS = ['shower-name', 'countdown-timer', 'shower-date', 'shower-region', 'shower-zhr', 'shower-moon', 'shower-visibility'];
+const IDS = [
+  'shower-name', 'countdown-timer', 'countdown-labels', 'shower-date', 'shower-region', 'shower-zhr', 'shower-moon',
+  'shower-visibility', 'card-city', 'peak-status', 'peak-next', 'city-skipped', 'row-dark', 'shower-dark',
+];
 const makeElement = (): Element => {
+  const classes = new Set<string>();
   const el: Element = {
-    textContent: 'n/a', className: 'event-value',
-    classList: { toggle: (_name: string, force: boolean): void => { el.long = force; }, remove: (): void => { el.long = false; } },
+    textContent: 'n/a', className: 'event-value', hidden: false, classes,
+    classList: {
+      toggle: (name: string, force: boolean): void => { if (force) classes.add(name); else classes.delete(name); },
+      remove: (name: string): void => { classes.delete(name); },
+    },
+    get long(): boolean { return classes.has('countdown-long'); },
   };
   return el;
 };
@@ -51,7 +66,7 @@ function loadPage() {
     clearTimeout: (): void => { counts.cleared++; },
   });
   ctx.window = ctx; // suncalc.js publishes itself as window.SunCalc; app.js calls window.setTimeout
-  for (const file of ['suncalc.js', 'peaks.js', 'app.js']) {
+  for (const file of ['suncalc.js', 'peaks.js', 'visibility.js', 'app.js']) {
     vm.runInContext(readFileSync(new URL(`../${file}`, import.meta.url), 'utf8'), ctx, { filename: file });
   }
   return {
@@ -235,7 +250,7 @@ test('updateUI: three-digit days take the smaller type size (class countdown-lon
   const { updateUI, text, el } = loadPage();
   fixedNow = Date.parse('2027-01-05T00:00:00Z');
   updateUI();
-  assert.equal(text('shower-name'), 'Lyrids');
+  assert.equal(text('shower-name'), 'April Lyrids');
   assert.match(text('countdown-timer'), /^\d{3}:/);
   assert.equal(el('countdown-timer').long, true);
   fixedNow = Date.parse('2038-01-02T00:00:00Z');
@@ -258,4 +273,157 @@ test('updateUI: when the table has run out the card says so', () => {
   updateUI();
   assert.equal(text('shower-name'), 'Leonids');
   assert.equal(el('shower-date').className, 'event-value'); // the full-width style goes with the message
+});
+
+// ---- The grace window (Marcos, 2026-11-11: after its peak a shower stays on the card for about
+// 12 hours, marked as passed, before the card moves on) ----
+
+const LEONIDS = Date.parse('2026-11-17T23:43:00Z');
+const GRACE = 12 * 3600 * 1000;
+const pickCard = ctx.pickCard as (now: number, visible: (index: number) => boolean) => { kind: string; entry?: Upcoming; index?: number };
+const always = (): boolean => true;
+const never = (): boolean => false;
+
+test('pickCard: a countdown before the peak, "passed" from the peak instant to 11:59:59.999 after it, then the next shower', () => {
+  const at = (offset: number): { kind: string; name: string | undefined } => {
+    const card = pickCard(LEONIDS + offset, always);
+    return { kind: card.kind, name: card.entry?.peak.name };
+  };
+  assert.deepEqual(at(-1000), { kind: 'countdown', name: 'Leonids' });
+  assert.deepEqual(at(-1), { kind: 'countdown', name: 'Leonids' });
+  assert.deepEqual(at(0), { kind: 'passed', name: 'Leonids' }); // exactly at the peak
+  assert.deepEqual(at(1000), { kind: 'passed', name: 'Leonids' });
+  assert.deepEqual(at(GRACE - 1), { kind: 'passed', name: 'Leonids' }); // 11:59:59.999
+  assert.deepEqual(at(GRACE - 1000), { kind: 'passed', name: 'Leonids' }); // 11:59:59
+  assert.deepEqual(at(GRACE), { kind: 'countdown', name: 'Geminids' }); // exactly 12:00:00
+  assert.deepEqual(at(GRACE + 1000), { kind: 'countdown', name: 'Geminids' });
+});
+
+test('pickCard: the table never has two peaks closer than 12 hours, so a grace card never hides a countdown', () => {
+  const rows = Array.from(vm.runInContext('PEAKS', ctx) as { utc: string }[], (p) => Date.parse(p.utc));
+  for (let i = 1; i < rows.length; i++) assert.ok((rows[i] as number) - (rows[i - 1] as number) > GRACE, `${i}`);
+});
+
+test('pickCard: a hidden shower gets no grace card, and the countdown skips it', () => {
+  const hideLeonids = (index: number): boolean => (vm.runInContext('SCHEDULE', ctx) as { peak: { id: string } }[])[index]?.peak.id !== 'LEO';
+  assert.equal(pickCard(LEONIDS + 3600 * 1000, hideLeonids).kind, 'countdown');
+  assert.equal(pickCard(LEONIDS + 3600 * 1000, hideLeonids).entry?.peak.name, 'Geminids');
+  assert.equal(pickCard(LEONIDS - 3600 * 1000, hideLeonids).entry?.peak.name, 'Geminids');
+});
+
+test('pickCard: end when the table has run out, none when a city sees nothing for a year and the table goes on', () => {
+  // Without a city, after the last peak of the table (and its 12 hours).
+  assert.equal(pickCard(Date.parse('2037-12-22T17:54:00Z') + GRACE, always).kind, 'end');
+  assert.equal(pickCard(Date.parse('2038-06-01T00:00:00Z'), always).kind, 'end');
+  // A city that sees nothing: none while the table reaches past now + 366 days, end when it does not.
+  assert.equal(pickCard(Date.parse('2026-11-11T00:00:00Z'), never).kind, 'none');
+  assert.equal(pickCard(Date.parse('2036-06-01T00:00:00Z'), never).kind, 'none');
+  assert.equal(pickCard(Date.parse('2036-12-30T00:00:00Z'), never).kind, 'end'); // the table ends before 366 days
+  assert.equal(pickCard(Date.parse('2037-03-01T00:00:00Z'), never).kind, 'end');
+});
+
+test('updateUI: the card in the grace window says the peak passed, how long ago, and what comes next', () => {
+  const page = loadPage();
+  const { updateUI, text, el } = page;
+  const savedTz = process.env.TZ;
+  try {
+    process.env.TZ = 'Europe/Oslo';
+    const seen: number[] = [];
+    const real = page.ctx.SunCalc.getMoonIllumination;
+    page.ctx.SunCalc.getMoonIllumination = (d: Date) => { seen.push(d.getTime()); return real(d); };
+
+    fixedNow = LEONIDS - 1000;
+    updateUI();
+    assert.equal(text('shower-name'), 'Leonids');
+    assert.equal(text('countdown-timer'), '00:00:00:01');
+    assert.equal(el('countdown-labels').hidden, false);
+    assert.equal(el('peak-status').hidden, true);
+    assert.equal(el('peak-next').hidden, true);
+    assert.equal(el('countdown-timer').classes.has('countdown-passed'), false);
+
+    fixedNow = LEONIDS; // at the instant
+    updateUI();
+    assert.equal(text('shower-name'), 'Leonids');
+    assert.equal(text('countdown-timer'), 'Peak passed');
+    assert.equal(el('countdown-timer').classes.has('countdown-passed'), true);
+    assert.equal(el('countdown-timer').long, false);
+    assert.equal(el('countdown-labels').hidden, true);
+    assert.equal(el('peak-status').hidden, false);
+    assert.equal(text('peak-status'), 'The peak was less than a minute ago.');
+    assert.equal(el('peak-next').hidden, false);
+    assert.match(text('peak-next'), /^Next: Geminids, .*14:41/); // 2026-12-14T13:41Z is 14:41 in Oslo
+    assert.match(text('shower-date'), /00:43/); // the same instant, the same format
+    assert.equal(text('shower-region'), 'Both, better in the north');
+    assert.equal(text('shower-zhr'), 'ZHR 15');
+    assert.equal(el('city-skipped').hidden, true);
+
+    fixedNow = LEONIDS + 59_999;
+    updateUI();
+    assert.equal(text('peak-status'), 'The peak was less than a minute ago.');
+    fixedNow = LEONIDS + 60_000;
+    updateUI();
+    assert.equal(text('peak-status'), 'The peak was 1 min ago.');
+    fixedNow = LEONIDS + (3 * 3600 + 20 * 60 + 5) * 1000;
+    updateUI();
+    assert.equal(text('peak-status'), 'The peak was 3 h 20 min ago.');
+    fixedNow = LEONIDS + 6 * 3600 * 1000;
+    updateUI();
+    assert.equal(text('peak-status'), 'The peak was 6 h ago.');
+    fixedNow = LEONIDS + GRACE - 1000; // 11:59:59
+    updateUI();
+    assert.equal(text('peak-status'), 'The peak was 11 h 59 min ago.');
+    assert.equal(text('countdown-timer'), 'Peak passed');
+
+    // The Moon line stays at the peak instant, in every one of those redraws: one evaluation only.
+    assert.ok(seen.length >= 1 && seen.every((t) => t === LEONIDS), 'the Moon is evaluated at the Leonid peak only');
+
+    fixedNow = LEONIDS + GRACE; // 12:00:00: the Geminids count down
+    updateUI();
+    assert.equal(text('shower-name'), 'Geminids');
+    assert.match(text('countdown-timer'), /^\d\d:\d\d:\d\d:\d\d$/);
+    assert.equal(el('countdown-timer').classes.has('countdown-passed'), false);
+    assert.equal(el('countdown-labels').hidden, false);
+    assert.equal(el('peak-status').hidden, true);
+    assert.equal(el('peak-next').hidden, true);
+    page.ctx.SunCalc.getMoonIllumination = real;
+  } finally {
+    if (savedTz === undefined) delete process.env.TZ; else process.env.TZ = savedTz;
+  }
+});
+
+test('updateUI: the last peak of the table gets its grace card, with no "Next" line, and then the end card', () => {
+  const { updateUI, text, el } = loadPage();
+  const URSIDS = Date.parse('2037-12-22T17:54:00Z');
+  fixedNow = URSIDS + 6 * 3600 * 1000;
+  updateUI();
+  assert.equal(text('shower-name'), 'Ursids');
+  assert.equal(text('countdown-timer'), 'Peak passed');
+  assert.equal(text('peak-status'), 'The peak was 6 h ago.');
+  assert.equal(el('peak-next').hidden, true);
+  fixedNow = URSIDS + GRACE - 1000;
+  updateUI();
+  assert.equal(text('shower-name'), 'Ursids');
+  fixedNow = URSIDS + GRACE;
+  updateUI();
+  assert.equal(text('shower-name'), 'No peak data');
+  assert.equal(text('countdown-timer'), '--:--:--:--');
+  assert.equal(el('countdown-timer').classes.has('countdown-passed'), false);
+  assert.equal(el('peak-status').hidden, true);
+  assert.equal(el('peak-next').hidden, true);
+  assert.match(text('shower-date'), /only knows peaks up to the end of 2037/);
+});
+
+test('formatDuration and joinNames: whole minutes rounded down, names for a sentence', () => {
+  const formatDuration = ctx.formatDuration as (m: number) => string;
+  const joinNames = ctx.joinNames as (names: string[]) => string;
+  assert.equal(formatDuration(0), '0 min');
+  assert.equal(formatDuration(55), '55 min');
+  assert.equal(formatDuration(60), '1 h');
+  assert.equal(formatDuration(840), '14 h');
+  assert.equal(formatDuration(200), '3 h 20 min');
+  assert.equal(formatDuration(200.9), '3 h 20 min');
+  assert.equal(joinNames([]), '');
+  assert.equal(joinNames(['A']), 'A');
+  assert.equal(joinNames(['A', 'B']), 'A and B');
+  assert.equal(joinNames(['A', 'B', 'C']), 'A, B and C');
 });

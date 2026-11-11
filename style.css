@@ -32,6 +32,8 @@
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+/* A row that sets display (.event-row) must still disappear when the page hides it. */
+[hidden] { display: none !important; }
 html { font-size: 16px; scroll-behavior: smooth; }
 
 body {
@@ -76,11 +78,17 @@ h1, h2, h3 { color: var(--text-primary); font-weight: 600; line-height: 1.2; let
 }
 
 .countdown-section { text-align: center; margin-bottom: var(--sp-xl); }
-.countdown-section h2 { font-size: 1.2rem; color: var(--accent-cyan); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: var(--sp-sm); }
+.countdown-section h2 { font-size: 1.2rem; color: var(--accent-cyan); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: var(--sp-sm); text-wrap: balance; }
+.card-city { color: var(--text-secondary); font-size: 0.85rem; margin: calc(var(--sp-xs) * -1) 0 var(--sp-sm); }
 .countdown-display { font-size: clamp(2.5rem, 8vw, 4rem); font-weight: 800; color: var(--accent-white); font-variant-numeric: tabular-nums; line-height: 1; text-shadow: 0 0 20px rgba(0,240,255,0.2); }
 .countdown-display.countdown-long { font-size: clamp(2rem, 6.6vw, 3.5rem); } /* three-digit days: one more character in the same width */
 .countdown-labels { display: flex; justify-content: center; gap: 1rem; margin-top: 0.5rem; color: var(--text-secondary); font-size: 0.8rem; text-transform: uppercase; }
 .countdown-labels span { width: 40px; text-align: center; }
+/* The grace window: the peak has passed and the card has not moved on yet */
+.countdown-display.countdown-passed { font-size: clamp(1.6rem, 6vw, 2.4rem); line-height: 1.2; }
+.peak-status { margin-top: var(--sp-sm); color: var(--text-primary); font-size: 0.95rem; font-weight: 500; }
+.peak-next { margin-top: var(--sp-xs); color: var(--text-secondary); font-size: 0.85rem; }
+.city-skipped { color: var(--text-secondary); font-size: 0.85rem; line-height: 1.5; margin-top: var(--sp-md); }
 
 .event-details { border-top: 1px solid var(--border); padding-top: var(--sp-md); margin-top: var(--sp-md); display: flex; flex-direction: column; gap: var(--sp-sm); }
 .event-row { display: flex; justify-content: space-between; align-items: center; padding: var(--sp-sm) 0; border-bottom: 1px solid rgba(255,255,255,0.02); }
@@ -88,9 +96,82 @@ h1, h2, h3 { color: var(--text-primary); font-weight: 600; line-height: 1.2; let
 .event-label { color: var(--text-secondary); font-size: 0.9rem; font-weight: 500; }
 .event-row:has(.event-message) { flex-wrap: wrap; }
 .event-value.event-message { flex: 1 0 100%; text-align: left; display: block; font-weight: 500; font-size: 0.9rem; }
+#shower-dark { white-space: nowrap; }
 .event-value { color: var(--text-primary); font-size: 1rem; font-weight: 600; text-align: right; display: flex; align-items: center; gap: 0.5rem; }
 
 .event-note { color: var(--text-secondary); font-size: 0.8rem; line-height: 1.5; margin-top: var(--sp-md); }
+
+/* ---- City filter ---------------------------------------------------- */
+/* The card holds the open suggestion list, so it must not clip it, and it sits above the later
+   sections (the sliding carousel is a transformed layer that would otherwise paint over the list). */
+.city-card { overflow: visible; z-index: 5; }
+.city-card h2 { font-size: 1.1rem; color: var(--accent-cyan); margin-bottom: var(--sp-sm); }
+.city-help { color: var(--text-secondary); font-size: 0.88rem; line-height: 1.5; margin-bottom: var(--sp-md); }
+.city-rule { color: var(--text-secondary); font-size: 0.8rem; line-height: 1.5; margin-top: var(--sp-md); }
+
+.field-group { display: flex; flex-direction: column; gap: var(--sp-xs); }
+.field-group label { font-size: 0.78rem; font-weight: 600; color: var(--text-secondary); letter-spacing: 0.04em; text-transform: uppercase; }
+
+.search-wrapper { position: relative; }
+
+.search-input {
+  width: 100%;
+  padding: 0.65rem 1rem 0.65rem 2.4rem;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  min-height: 44px;
+  outline: none;
+  transition: border-color var(--t-fast), box-shadow var(--t-fast), background var(--t-fast);
+  -webkit-appearance: none;
+  appearance: none;
+  /* A placeholder or a value wider than the field ends in an ellipsis, not in half a letter. */
+  text-overflow: ellipsis;
+}
+.search-input:focus { border-color: var(--accent-cyan); background: rgba(0, 0, 0, 0.45); }
+.search-input:focus-visible { outline: 2px solid var(--accent-cyan); outline-offset: 2px; }
+
+.search-icon {
+  position: absolute; left: 0.8rem; top: 50%; transform: translateY(-50%);
+  width: 16px; height: 16px; color: var(--text-muted); pointer-events: none; transition: color var(--t-fast);
+}
+.search-wrapper:focus-within .search-icon { color: var(--accent-cyan); }
+
+.dropdown {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+  background: #0a0818; border: 1px solid var(--border-active); border-radius: var(--r-md);
+  max-height: 22rem; overflow-y: auto; z-index: 100; list-style: none;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.7);
+  scrollbar-width: thin; scrollbar-color: var(--text-muted) transparent;
+}
+.dropdown li {
+  padding: 0.55rem 1rem; min-height: 44px; cursor: pointer; font-size: 0.9rem;
+  display: flex; justify-content: space-between; align-items: center; gap: var(--sp-sm);
+  transition: background var(--t-fast), color var(--t-fast);
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+.dropdown li:last-child { border-bottom: none; }
+.dropdown li:hover, .dropdown li.highlighted { background: rgba(0, 240, 255, 0.08); color: var(--accent-cyan); }
+.dropdown li.highlighted { outline: 2px solid var(--accent-cyan); outline-offset: -2px; }
+.dropdown li .city-name { font-weight: 500; }
+.dropdown li .city-country { font-size: 0.75rem; color: var(--text-secondary); text-align: right; }
+
+.selected-city {
+  display: flex; align-items: center; gap: var(--sp-sm); flex-wrap: wrap;
+  background: rgba(0, 240, 255, 0.07); border: 1px solid rgba(0, 240, 255, 0.18); border-radius: var(--r-sm);
+  padding: var(--sp-sm) var(--sp-md); font-size: 0.88rem; color: var(--accent-cyan); margin-top: var(--sp-xs);
+}
+.clear-btn {
+  background: none; border: 1px solid var(--border); border-radius: var(--r-sm);
+  color: var(--text-primary); cursor: pointer; font-size: 0.85rem; font-weight: 600;
+  min-height: 44px; padding: 0 var(--sp-md); margin-left: auto; transition: color var(--t-fast), border-color var(--t-fast);
+}
+.clear-btn:hover { color: #ff6b6b; border-color: rgba(255, 107, 107, 0.5); }
+.clear-btn:focus-visible { outline: 2px solid var(--accent-cyan); outline-offset: 2px; }
+
+.city-status { color: var(--text-secondary); font-size: 0.85rem; line-height: 1.4; min-height: 1.2em; margin-top: var(--sp-xs); }
 
 /* Visibility Pill */
 .visibility-pill {
