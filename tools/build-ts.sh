@@ -2,9 +2,10 @@
 # Compile MeteorWatch's TypeScript (ts/) into the JavaScript the page loads.
 #
 # Copied on 5 November 2026 from AstroQuiz's tools/build-ts.sh (itself from GDPRLetterBuilder's,
-# EclipseTracker's and the Website's). Changed for MeteorWatch: one source, ts/app.ts, which compiles
-# to app.js. MeteorWatch has no ES modules: index.html loads suncalc.js and app.js as classic scripts
-# that share one global scope, as in SunApp. ts/suncalc.d.ts types the vendored SunCalc 1.8.0
+# EclipseTracker's and the Website's). Changed for MeteorWatch: two sources, ts/app.ts and ts/peaks.ts, which
+# compile to app.js and peaks.js (ts/peaks.ts is written by tools/gen-peaks.py, not by hand). MeteorWatch has
+# no ES modules: index.html loads suncalc.js, peaks.js and app.js as classic scripts that share one global
+# scope, as in SunApp. ts/suncalc.d.ts types the vendored SunCalc 1.8.0
 # (suncalc.js, kept byte for byte), which is the only other JavaScript allowed at the root.
 #
 #   tools/build-ts.sh           install the pinned compiler, compile ts/app.ts into app.js at the
@@ -15,7 +16,8 @@
 #                               (in a git checkout), or is not (stamps aside) byte for byte what
 #                               ts/app.ts compiles to; when the root holds a .js that no source
 #                               compiles to, other than the vendored suncalc.js; or when a page
-#                               carries a stale ?v=
+#                               carries a stale ?v=; or when ts/peaks.ts is not what
+#                               tools/gen-peaks.py writes
 #
 # Stamps. bump_assets.py stamps the page's src and href with each file's hash (?v=...). app.js
 # imports nothing, but every comparison below strips a stamp from a relative import first
@@ -110,6 +112,7 @@ if [ "$MODE" = check ]; then
       *) echo "build-ts: $f is JavaScript that no TypeScript source compiles to: delete it, or restore its source" >&2; bad=1 ;;
     esac
   done
+  python3 -I "$ROOT/tools/gen-peaks.py" --check || bad=1
   python3 -I "$ROOT/bump_assets.py" --check || bad=1
   [ "$bad" = 0 ] || exit 1
   echo "build-ts: check passed"

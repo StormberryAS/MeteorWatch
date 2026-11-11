@@ -4,5 +4,8 @@
 #
 # app.js is compiled from ts/app.ts by tools/build-ts.sh (5 November 2026); edit the TypeScript.
 /app.js linguist-generated=true
+# peaks.js is compiled from ts/peaks.ts, which tools/gen-peaks.py writes (11 November 2026); change the generator.
+/peaks.js linguist-generated=true
+/ts/peaks.ts linguist-generated=true
 # suncalc.js is SunCalc 1.8.0 (BSD-2-Clause, mourner/suncalc), vendored and kept byte for byte.
 /suncalc.js linguist-vendored=true

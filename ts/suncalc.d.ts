@@ -55,7 +55,7 @@ interface SunCalcTimes {
 
 interface SunCalcStatic {
   getPosition(date: Date, lat: number, lng: number): SunCalcSunPosition;
-  getTimes(date: Date, lat: number, lng: number, height?: number): SunCalcTimes;
+  getTimes(date: Date, lat: number, lng: number): SunCalcTimes;
   addTime(angle: number, riseName: string, setName: string): void;
   times: Array<[number, string, string]>;
   getMoonPosition(date: Date, lat: number, lng: number): SunCalcMoonPosition;

@@ -78,6 +78,7 @@ h1, h2, h3 { color: var(--text-primary); font-weight: 600; line-height: 1.2; let
 .countdown-section { text-align: center; margin-bottom: var(--sp-xl); }
 .countdown-section h2 { font-size: 1.2rem; color: var(--accent-cyan); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: var(--sp-sm); }
 .countdown-display { font-size: clamp(2.5rem, 8vw, 4rem); font-weight: 800; color: var(--accent-white); font-variant-numeric: tabular-nums; line-height: 1; text-shadow: 0 0 20px rgba(0,240,255,0.2); }
+.countdown-display.countdown-long { font-size: clamp(2rem, 6.6vw, 3.5rem); } /* three-digit days: one more character in the same width */
 .countdown-labels { display: flex; justify-content: center; gap: 1rem; margin-top: 0.5rem; color: var(--text-secondary); font-size: 0.8rem; text-transform: uppercase; }
 .countdown-labels span { width: 40px; text-align: center; }
 
@@ -85,7 +86,11 @@ h1, h2, h3 { color: var(--text-primary); font-weight: 600; line-height: 1.2; let
 .event-row { display: flex; justify-content: space-between; align-items: center; padding: var(--sp-sm) 0; border-bottom: 1px solid rgba(255,255,255,0.02); }
 .event-row:last-child { border-bottom: none; }
 .event-label { color: var(--text-secondary); font-size: 0.9rem; font-weight: 500; }
+.event-row:has(.event-message) { flex-wrap: wrap; }
+.event-value.event-message { flex: 1 0 100%; text-align: left; display: block; font-weight: 500; font-size: 0.9rem; }
 .event-value { color: var(--text-primary); font-size: 1rem; font-weight: 600; text-align: right; display: flex; align-items: center; gap: 0.5rem; }
+
+.event-note { color: var(--text-secondary); font-size: 0.8rem; line-height: 1.5; margin-top: var(--sp-md); }
 
 /* Visibility Pill */
 .visibility-pill {

@@ -10,15 +10,16 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const COMPILED = ['app.js'];
+const COMPILED = ['app.js', 'peaks.js'];
 const VENDORED = ['suncalc.js'];
 
 /** SunCalc 1.8.0 exactly as vendored in the Labs repositories (sha256 of suncalc.js), as in SunApp's tests. */
 const SUNCALC_SHA256 = 'e17fa013a5ab354c22844f3cebecd4a2b866518e5b63d132d537ea6578cb217b';
 
-test('tools/build-ts.sh --check passes: app.js equals a fresh compile', () => {
+test('tools/build-ts.sh --check passes: app.js and peaks.js equal a fresh compile', () => {
   const out = execFileSync(`${root}tools/build-ts.sh`, ['--check'], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
   assert.match(out, /^build-ts: app\.js matches ts\/app\.ts$/m);
+  assert.match(out, /^build-ts: peaks\.js matches ts\/peaks\.ts$/m);
   assert.match(out, /^build-ts: check passed$/m);
 });
 

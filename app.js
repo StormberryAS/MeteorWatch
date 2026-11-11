@@ -1,117 +1,136 @@
 "use strict";
-const METEOR_SHOWERS = [
-    { name: 'Quadrantids', peakMonth: 0, peakDay: 3, zhr: 110, region: 'Northern Hemisphere', description: 'Brief but intense peak.' },
-    { name: 'Lyrids', peakMonth: 3, peakDay: 22, zhr: 18, region: 'Northern Hemisphere', description: 'Known for bright meteors with glowing trails.' },
-    { name: 'Eta Aquariids', peakMonth: 4, peakDay: 6, zhr: 50, region: 'Southern Hemisphere', description: 'Debris from Halley\'s Comet.' },
-    { name: 'Delta Aquariids', peakMonth: 6, peakDay: 30, zhr: 20, region: 'Southern Hemisphere', description: 'Faint meteors best seen from southern latitudes.' },
-    { name: 'Perseids', peakMonth: 7, peakDay: 12, zhr: 100, region: 'Northern Hemisphere', description: 'One of the most popular and reliable showers.' },
-    { name: 'Orionids', peakMonth: 9, peakDay: 21, zhr: 20, region: 'Global', description: 'Fast meteors with persistent trains, from Halley\'s.' },
-    { name: 'Leonids', peakMonth: 10, peakDay: 17, zhr: 15, region: 'Global', description: 'Fast meteors, occasional outburst storms.' },
-    { name: 'Geminids', peakMonth: 11, peakDay: 14, zhr: 120, region: 'Global (Best in North)', description: 'Often the strongest shower of the year.' },
-    { name: 'Ursids', peakMonth: 11, peakDay: 22, zhr: 10, region: 'Northern Hemisphere', description: 'A low-key shower preceding Christmas.' }
-];
-let nextShower = null;
-let moonDataCalculated = false;
+const REGION = {
+    QUA: 'Northern Hemisphere',
+    LYR: 'Both, better in the north',
+    ETA: 'Both, better in the south',
+    SDA: 'Both, better in the south',
+    PER: 'Northern Hemisphere',
+    ORI: 'Both hemispheres',
+    LEO: 'Both, better in the north',
+    GEM: 'Both, better in the north',
+    URS: 'Northern Hemisphere'
+};
+const SCHEDULE = PEAKS.map((peak) => ({ peak, time: Date.parse(peak.utc) }));
+let shown;
+let timer;
 function byId(id) {
     const el = document.getElementById(id);
     if (!el)
         throw new Error(`MeteorWatch: #${id} is missing from the page`);
     return el;
 }
-function findNextShower() {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    let upcoming = null;
-    let minDiff = Infinity;
-    for (const year of [currentYear, currentYear + 1]) {
-        for (const shower of METEOR_SHOWERS) {
-            const peakDate = new Date(Date.UTC(year, shower.peakMonth, shower.peakDay, 12, 0, 0));
-            const diff = peakDate.getTime() - now.getTime();
-            if (diff > 0 && diff < minDiff) {
-                minDiff = diff;
-                upcoming = {
-                    ...shower,
-                    peakDate: peakDate,
-                    diff: diff
-                };
-            }
-        }
+function findNextPeak(now) {
+    let next = null;
+    for (const entry of SCHEDULE) {
+        if (entry.time > now && (next === null || entry.time < next.time))
+            next = entry;
     }
-    if (!upcoming)
-        throw new Error('MeteorWatch: no upcoming meteor shower');
-    return upcoming;
+    return next;
+}
+function moonPhaseName(phase) {
+    if (phase <= 0.03 || phase >= 0.97)
+        return 'New Moon';
+    if (phase < 0.22)
+        return 'Waxing Crescent';
+    if (phase <= 0.28)
+        return 'First Quarter';
+    if (phase < 0.47)
+        return 'Waxing Gibbous';
+    if (phase <= 0.53)
+        return 'Full Moon';
+    if (phase < 0.72)
+        return 'Waning Gibbous';
+    if (phase <= 0.78)
+        return 'Last Quarter';
+    return 'Waning Crescent';
+}
+function rateMoon(illuminationPct) {
+    if (illuminationPct < 20)
+        return { visibilityScore: 'EXCELLENT', visibilityClass: 'visibility-excellent' };
+    if (illuminationPct < 60)
+        return { visibilityScore: 'GOOD', visibilityClass: 'visibility-good' };
+    return { visibilityScore: 'POOR', visibilityClass: 'visibility-poor' };
 }
 function calculateVisibility(peakDate) {
-    const moonIllumination = SunCalc.getMoonIllumination(peakDate);
-    const phase = moonIllumination.phase;
-    const fraction = moonIllumination.fraction;
-    let moonPhaseText = '';
-    if (phase < 0.03 || phase > 0.97)
-        moonPhaseText = 'New Moon';
-    else if (phase < 0.25)
-        moonPhaseText = 'Waxing Crescent';
-    else if (phase < 0.28)
-        moonPhaseText = 'First Quarter';
-    else if (phase < 0.50)
-        moonPhaseText = 'Waxing Gibbous';
-    else if (phase < 0.53)
-        moonPhaseText = 'Full Moon';
-    else if (phase < 0.75)
-        moonPhaseText = 'Waning Gibbous';
-    else if (phase < 0.78)
-        moonPhaseText = 'Last Quarter';
-    else
-        moonPhaseText = 'Waning Crescent';
-    const illuminationPct = Math.round(fraction * 100);
-    let visibilityScore = 'POOR';
-    let visibilityClass = 'visibility-poor';
-    if (fraction < 0.2) {
-        visibilityScore = 'EXCELLENT';
-        visibilityClass = 'visibility-excellent';
-    }
-    else if (fraction < 0.6) {
-        visibilityScore = 'GOOD';
-        visibilityClass = 'visibility-good';
-    }
+    const moon = SunCalc.getMoonIllumination(peakDate);
+    const illuminationPct = Math.round(moon.fraction * 100);
     return {
-        moonPhaseText: `${moonPhaseText} (${illuminationPct}% illuminated)`,
-        visibilityScore,
-        visibilityClass
+        moonPhaseText: `${moonPhaseName(moon.phase)} (${illuminationPct}% illuminated)`,
+        ...rateMoon(illuminationPct)
     };
 }
+function formatPeak(time, timeZone, locale) {
+    return new Intl.DateTimeFormat(locale, {
+        weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit', timeZone, timeZoneName: 'short'
+    }).format(time);
+}
+function formatCountdown(diff) {
+    const total = Math.max(0, Math.floor(diff / 1000));
+    const parts = [
+        Math.floor(total / 86400),
+        Math.floor((total % 86400) / 3600),
+        Math.floor((total % 3600) / 60),
+        total % 60
+    ];
+    return parts.map((n) => String(n).padStart(2, '0')).join(':');
+}
+function nextTickDelay(now) {
+    return 1000 - (now % 1000);
+}
+function showPeak(next) {
+    byId('shower-name').textContent = next.peak.name;
+    byId('shower-date').className = 'event-value';
+    byId('shower-region').textContent = REGION[next.peak.id];
+    byId('shower-zhr').textContent = `ZHR ${next.peak.zhr}`;
+    const vis = calculateVisibility(new Date(next.time));
+    byId('shower-moon').textContent = vis.moonPhaseText;
+    const visEl = byId('shower-visibility');
+    visEl.textContent = vis.visibilityScore;
+    visEl.className = `event-value visibility-pill ${vis.visibilityClass}`;
+}
+function showTableEnd() {
+    byId('shower-name').textContent = 'No peak data';
+    byId('countdown-timer').textContent = '--:--:--:--';
+    byId('countdown-timer').classList.remove('countdown-long');
+    byId('shower-date').textContent = `This version only knows peaks up to the end of ${PEAKS_LAST_YEAR}. A newer version of MeteorWatch has a longer table.`;
+    byId('shower-date').className = 'event-value event-message';
+    byId('shower-region').textContent = 'n/a';
+    byId('shower-zhr').textContent = 'n/a';
+    byId('shower-moon').textContent = 'n/a';
+    const visEl = byId('shower-visibility');
+    visEl.textContent = 'n/a';
+    visEl.className = 'event-value';
+}
+function setText(id, text) {
+    const el = byId(id);
+    if (el.textContent !== text)
+        el.textContent = text;
+}
 function updateUI() {
-    const now = new Date().getTime();
-    if (!nextShower || nextShower.peakDate.getTime() - now < 0) {
-        nextShower = findNextShower();
-        moonDataCalculated = false;
+    const now = Date.now();
+    const next = findNextPeak(now);
+    if (next !== shown) {
+        shown = next;
+        if (next === null)
+            showTableEnd();
+        else
+            showPeak(next);
     }
-    const diff = nextShower.peakDate.getTime() - now;
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-    const d = String(days).padStart(2, '0');
-    const h = String(hours).padStart(2, '0');
-    const m = String(minutes).padStart(2, '0');
-    const s = String(seconds).padStart(2, '0');
-    byId('countdown-timer').textContent = `${d}:${h}:${m}:${s}`;
-    if (!moonDataCalculated) {
-        byId('shower-name').textContent = nextShower.name;
-        const formatter = new Intl.DateTimeFormat(undefined, {
-            weekday: 'short', year: 'numeric', month: 'short', day: 'numeric', timeZoneName: 'short'
-        });
-        byId('shower-date').textContent = formatter.format(nextShower.peakDate);
-        byId('shower-region').textContent = nextShower.region;
-        byId('shower-zhr').textContent = `${nextShower.zhr} meteors/hr`;
-        const vis = calculateVisibility(nextShower.peakDate);
-        byId('shower-moon').textContent = vis.moonPhaseText;
-        const visEl = byId('shower-visibility');
-        visEl.textContent = vis.visibilityScore;
-        visEl.className = `event-value visibility-pill ${vis.visibilityClass}`;
-        moonDataCalculated = true;
+    if (next !== null) {
+        const countdown = formatCountdown(next.time - now);
+        setText('countdown-timer', countdown);
+        byId('countdown-timer').classList.toggle('countdown-long', countdown.length > 11);
+        setText('shower-date', formatPeak(next.time));
     }
-    requestAnimationFrame(updateUI);
+    if (timer !== undefined)
+        clearTimeout(timer);
+    timer = window.setTimeout(updateUI, nextTickDelay(Date.now()));
 }
 document.addEventListener('DOMContentLoaded', () => {
     updateUI();
+});
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden)
+        updateUI();
 });

@@ -16,7 +16,7 @@
   <title>MeteorWatch | Deterministic Meteor Shower Tracker</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
-  <meta name="description" content="Tracker for major meteor showers, calculated in your browser and automatically adjusted for local moon illumination to determine true visibility." />
+  <meta name="description" content="Countdown to the next major meteor shower peak, with the Moon's phase and light at that moment, calculated in your browser." />
 
   <!-- Local Fonts: Inter -->
   <link rel="stylesheet" href="fonts/inter/inter.css?v=868d674e" />
@@ -24,7 +24,7 @@
   <!-- SunCalc library — local copy -->
   <script src="suncalc.js?v=e17fa013"></script>
 
-  <link rel="stylesheet" href="style.css?v=ce36f863" />
+  <link rel="stylesheet" href="style.css?v=8180af6e" />
   <link rel="canonical" href="https://meteor.stormberry.as/" />
 </head>
 <body>
@@ -54,7 +54,7 @@
       
       <div class="event-details" id="event-details">
         <div class="event-row">
-          <span class="event-label">Peak Date</span>
+          <span class="event-label">Peak</span>
           <span class="event-value" id="shower-date">--</span>
         </div>
         <div class="event-row">
@@ -62,8 +62,8 @@
           <span class="event-value" id="shower-region">--</span>
         </div>
         <div class="event-row">
-          <span class="event-label">Activity Rate (ZHR)</span>
-          <span class="event-value" id="shower-zhr">-- meteors/hr</span>
+          <span class="event-label">Activity Rate</span>
+          <span class="event-value" id="shower-zhr">--</span>
         </div>
         <div class="event-row">
           <span class="event-label">Moon Phase at Peak</span>
@@ -74,6 +74,7 @@
           <span class="event-value" id="shower-visibility">--</span>
         </div>
       </div>
+      <p class="event-note">ZHR is the ideal hourly rate under a perfectly dark sky with the radiant overhead; what you see is usually lower. Peak times follow the International Meteor Organization&rsquo;s solar longitudes and can be off by hours.</p>
     </div>
   </main>
 
@@ -321,6 +322,7 @@
     </div>
   </footer>
 
-  <script src="app.js?v=76858dc1"></script>
+  <script src="peaks.js?v=2a47a022"></script>
+  <script src="app.js?v=3dedc8a3"></script>
 </body>
 </html>
